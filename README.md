@@ -1,6 +1,6 @@
 # Termi
 
-Termi is a desktop wrapper that provides a friendly, cozy chat interface for powerful Agentic AI CLIs (like the Claude Agent SDK). 
+Termi is a desktop wrapper that provides a friendly, cozy chat interface for powerful Agentic AI CLIs (like the antigravity cli or Claude Agent SDK). 
 
 I originally built this tool for my wife to empower her to use advanced CLI capabilities without having to learn terminal commands. It worked so well that I realized a lot more people could benefit from it! It bridges the gap between powerful developer tools and accessible user interfaces.
 
