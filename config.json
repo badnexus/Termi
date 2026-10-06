@@ -1,0 +1,8 @@
+{
+  "engineType": "agy",
+  "agentName": "Agentic RAG",
+  "workspaceRepo": "G:/My Drive/myProjects/CaptAIn_for_all_Terminal_Buddy",
+  "workspaceRoot": "C:\\Users\\flori\\Pictures\\Screenshots",
+  "greetOnStart": false,
+  "persona": "soft"
+}

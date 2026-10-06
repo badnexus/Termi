@@ -1,0 +1,54 @@
+{
+  "name": "termi",
+  "productName": "Termi",
+  "version": "0.1.0",
+  "description": "A friendly, cozy chat interface wrapper for powerful Agentic AI CLIs.",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "prebuild": "node -e \"require('fs').mkdirSync('src/renderer/vendor',{recursive:true});require('fs').copyFileSync('node_modules/marked/lib/marked.umd.js','src/renderer/vendor/marked.umd.js')\"",
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "dev": "electron .",
+    "dist": "npm run build && electron-builder --win portable",
+    "postdist": "node scripts/release-info.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.286",
+    "marked": "^18.0.14"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "typescript": "^7.0.2"
+  },
+  "build": {
+    "appId": "com.example.termi",
+    "productName": "Termi",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.map",
+      "src/renderer/**/*",
+      "config.json",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/@anthropic-ai/claude-agent-sdk*/**"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "TerminalBuddy-${version}-portable.exe",
+      "unpackDirName": "TerminalBuddy"
+    }
+  },
+  "private": "true"
+}

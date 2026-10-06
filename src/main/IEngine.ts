@@ -1,0 +1,19 @@
+import { EventEmitter } from 'node:events';
+import type { EngineEvent, ModelChoice } from './EngineTypes';
+
+export interface IEngine extends EventEmitter {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  send(text: string): void;
+  interrupt(): Promise<void>;
+  answerPermission(requestId: string, allow: boolean, always: boolean): void;
+  /** Models the user can pick from; the current one is reported by the 'init' event. */
+  listModels(): Promise<ModelChoice[]>;
+  /** Switch model. Returns true if done live, false if the caller must restart the engine. */
+  setModel(model?: string): Promise<boolean>;
+
+  // EventEmitter methods
+  on(eventName: 'event', listener: (ev: EngineEvent) => void): this;
+  once(eventName: 'event', listener: (ev: EngineEvent) => void): this;
+  emit(eventName: 'event', ev: EngineEvent): boolean;
+}

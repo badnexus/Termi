@@ -1,0 +1,91 @@
+import { t } from './i18n';
+
+export type TerminalLevel = 'info' | 'tool' | 'stderr' | 'hook' | 'result' | 'assistant' | 'thinking';
+
+export type EngineEvent =
+  | { kind: 'init'; model: string; version: string; permissionMode: string; skills: string[]; slashCommands: string[]; tools: string[] }
+  /** Engine accepts messages; 'init' (model, skills) may only follow the first message. */
+  | { kind: 'ready' }
+  | { kind: 'text_start' }
+  | { kind: 'text_delta'; text: string }
+  | { kind: 'text_done' }
+  | { kind: 'tool_use'; id: string; name: string; summary: string; input: unknown }
+  | { kind: 'tool_result'; id: string; summary: string; isError: boolean }
+  | { kind: 'permission_request'; requestId: string; toolName: string; summary: string; detail: string; input: Record<string, unknown>; canAlways: boolean }
+  | { kind: 'permission_resolved'; requestId: string; allowed: boolean }
+  | { kind: 'result'; costUsd: number; durationMs: number; numTurns: number; isError: boolean }
+  | { kind: 'terminal'; line: string; level: TerminalLevel }
+  | { kind: 'status'; text: string }
+  | { kind: 'error'; text: string };
+
+export interface EngineOptions {
+  cwd: string;
+  agentName?: string;
+  systemPromptAppend?: string;
+  model?: string;
+  claudeExecutable?: string;
+  /** Set only by the --dangerously-skip-permissions launch flag: no Freigabe-Karten at all. */
+  skipPermissions?: boolean;
+  /** Models offered in the picker for engines that cannot list them themselves (agy, gpts). */
+  availableModels?: string[];
+}
+
+export interface ModelChoice {
+  value: string;
+  displayName: string;
+  description?: string;
+}
+
+/** Mirror a block of assistant text into the Terminal view, one event per line. */
+export function assistantTerminalLines(text: string, prefix = ''): EngineEvent[] {
+  const lines = text.replace(/\s+$/, '').split(/\r?\n/);
+  return lines.map((line, i) => ({ kind: 'terminal', line: `${prefix}${i === 0 ? '◀ ' : '  '}${line}`, level: 'assistant' }));
+}
+
+/** Plain-language one-liner + detail text for a tool call (deterministic, no model call). */
+export function describeTool(toolName: string, input: Record<string, unknown>): { summary: string; detail: string } {
+  const s = (v: unknown) => (typeof v === 'string' ? v : v === undefined ? '' : JSON.stringify(v));
+  switch (toolName) {
+    case 'Bash': {
+      const cmd = s(input.command);
+      const desc = s(input.description);
+      return { summary: desc || cmd.slice(0, 120), detail: cmd };
+    }
+    case 'Write': {
+      const content = s(input.content);
+      return { summary: t('tool.write', { path: s(input.file_path) }), detail: content.length > 1200 ? content.slice(0, 1200) + '\n…' : content };
+    }
+    case 'Edit':
+      return { summary: t('tool.edit', { path: s(input.file_path) }), detail: t('tool.editDetail', { old: s(input.old_string).slice(0, 600), new: s(input.new_string).slice(0, 600) }) };
+    case 'Read':
+      return { summary: t('tool.read', { path: s(input.file_path) }), detail: s(input.file_path) };
+    case 'Glob':
+    case 'Grep':
+      return { summary: t('tool.search', { pattern: s(input.pattern) }), detail: JSON.stringify(input, null, 2) };
+    case 'WebFetch':
+      return { summary: t('tool.webFetch', { url: s(input.url) }), detail: s(input.url) };
+    case 'WebSearch':
+      return { summary: t('tool.webSearch', { query: s(input.query) }), detail: s(input.query) };
+    case 'Skill':
+      return { summary: `Skill: ${s(input.skill)} ${s(input.args)}`.trim(), detail: JSON.stringify(input, null, 2) };
+    case 'Agent':
+    case 'Task':
+      return { summary: t('tool.agent', { desc: s(input.description) }), detail: s(input.prompt).slice(0, 1200) };
+    default: {
+      const json = JSON.stringify(input);
+      return { summary: json.length > 140 ? json.slice(0, 140) + '…' : json, detail: JSON.stringify(input, null, 2) };
+    }
+  }
+}
+
+export function summarizeToolResult(content: unknown): string {
+  let text = '';
+  if (typeof content === 'string') text = content;
+  else if (Array.isArray(content)) {
+    text = content
+      .map((b) => (b && typeof b === 'object' && 'text' in b ? String((b as { text: unknown }).text) : ''))
+      .join(' ');
+  } else if (content !== undefined) text = JSON.stringify(content);
+  text = text.replace(/\s+/g, ' ').trim();
+  return text.length > 160 ? text.slice(0, 160) + '…' : text || t('tool.emptyResult');
+}
