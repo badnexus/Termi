@@ -55,10 +55,14 @@
 
       // Tools (for permissions etc)
       'tool.Bash': 'Befehl ausführen',
+      'tool.run_command': 'Befehl ausführen',
       'tool.Write': 'Datei anlegen',
+      'tool.write_to_file': 'Datei anlegen',
       'tool.Edit': 'Datei ändern',
+      'tool.replace_file_content': 'Datei ändern',
       'tool.MultiEdit': 'Dateien ändern',
       'tool.Read': 'Datei lesen',
+      'tool.view_file': 'Datei lesen',
       'tool.Glob': 'Dateien suchen',
       'tool.Grep': 'In Dateien suchen',
       'tool.WebFetch': 'Webseite abrufen',
@@ -143,10 +147,14 @@
 
       // Tools
       'tool.Bash': 'Run command',
+      'tool.run_command': 'Run command',
       'tool.Write': 'Create file',
+      'tool.write_to_file': 'Create file',
       'tool.Edit': 'Edit file',
+      'tool.replace_file_content': 'Edit file',
       'tool.MultiEdit': 'Edit files',
       'tool.Read': 'Read file',
+      'tool.view_file': 'Read file',
       'tool.Glob': 'Search files',
       'tool.Grep': 'Search in files',
       'tool.WebFetch': 'Fetch webpage',

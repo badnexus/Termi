@@ -1,5 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
+import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { IEngine } from './IEngine';
@@ -20,6 +22,12 @@ export class AgyEngine extends EventEmitter implements IEngine {
   private exited = false;
   readonly restartOnInterrupt = true;
 
+  private hookServer: http.Server | null = null;
+  private hookPort = 0;
+  private hookInstalled = false;
+  private pendingHooks = new Map<string, { toolName: string; resolve: (res: { decision: 'allow' | 'deny'; reason?: string }) => void }>();
+  private alwaysAllowedTools = new Set<string>();
+
   isAlive(): boolean {
     return Boolean(this.proc) && !this.exited && Boolean(this.proc?.stdin?.writable);
   }
@@ -37,9 +45,14 @@ export class AgyEngine extends EventEmitter implements IEngine {
     this.emitEvent({ kind: 'terminal', line: t('engine.starting', { agent: this.opts.agentName || 'Agy', cwd: this.opts.cwd }), level: 'info' });
 
     const args = ['--input-format', 'stream-json', '--output-format', 'stream-json'];
+    // In headless stream-json mode, agy auto-denies interactive tools unless --dangerously-skip-permissions is passed.
+    // When permissions are enabled, our PreToolUse hook server intercepts every dangerous tool call, displays
+    // the Approval Card in Termi, and holds the hook response until the user approves or denies.
+    args.push('--dangerously-skip-permissions');
     if (this.opts.skipPermissions) {
-      args.push('--dangerously-skip-permissions');
       this.emitEvent({ kind: 'terminal', line: t('engine.skipWarning'), level: 'stderr' });
+    } else {
+      await this.setupHookServer();
     }
     if (this.opts.model) {
       if (!SAFE_ARG.test(this.opts.model)) {
@@ -186,6 +199,15 @@ export class AgyEngine extends EventEmitter implements IEngine {
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
+    for (const [, p] of this.pendingHooks) {
+      p.resolve({ decision: 'deny', reason: t('engine.sessionEnded') });
+    }
+    this.pendingHooks.clear();
+    if (this.hookServer) {
+      this.hookServer.close();
+      this.hookServer = null;
+    }
+    this.cleanUpHookFiles();
     this.proc?.kill();
     this.removeAllListeners();
   }
@@ -209,9 +231,202 @@ export class AgyEngine extends EventEmitter implements IEngine {
   }
 
   answerPermission(requestId: string, allow: boolean, always: boolean): void {
+    const pendingHook = this.pendingHooks.get(requestId);
+    if (pendingHook) {
+      this.pendingHooks.delete(requestId);
+      if (always && allow && pendingHook.toolName) {
+        this.alwaysAllowedTools.add(pendingHook.toolName);
+      }
+      pendingHook.resolve({
+        decision: allow ? 'allow' : 'deny',
+        reason: allow ? undefined : t('engine.deniedByUser'),
+      });
+    }
+
+    // Also write to process stdin if applicable
     this.write({ event: 'permission_resolved', request_id: requestId, allowed: allow, always });
     this.emitEvent({ kind: 'permission_resolved', requestId, allowed: allow });
     this.emitEvent({ kind: 'terminal', line: `${allow ? t('engine.allowed') : t('engine.denied')} (${requestId.slice(0, 8)})`, level: 'hook' });
+  }
+
+  private setupHookServer(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.hookServer = http.createServer((req, res) => {
+        if (req.method === 'POST' && req.url === '/check-tool') {
+          let body = '';
+          req.on('data', (chunk) => { body += chunk; });
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body) as Record<string, unknown>;
+              this.handleHookCheck(data, res);
+            } catch {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ decision: 'allow' }));
+            }
+          });
+        } else {
+          res.writeHead(404);
+          res.end();
+        }
+      });
+
+      this.hookServer.on('error', (err) => {
+        this.emitEvent({ kind: 'terminal', line: `Hook server error: ${String(err)}`, level: 'stderr' });
+        resolve();
+      });
+
+      this.hookServer.listen(0, '127.0.0.1', () => {
+        const addr = this.hookServer?.address() as AddressInfo;
+        if (addr && addr.port) {
+          this.hookPort = addr.port;
+          this.installHookFiles();
+        }
+        resolve();
+      });
+    });
+  }
+
+  private installHookFiles(): void {
+    try {
+      const agentsDir = path.join(this.opts.cwd, '.agents');
+      fs.mkdirSync(agentsDir, { recursive: true });
+
+      const scriptContent = `const http = require('http');
+const fs = require('fs');
+try {
+  const stdin = fs.readFileSync(0, 'utf8');
+  const req = http.request({
+    hostname: '127.0.0.1',
+    port: ${this.hookPort},
+    path: '/check-tool',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 300000
+  }, (res) => {
+    let body = '';
+    res.on('data', (d) => { body += d; });
+    res.on('end', () => {
+      process.stdout.write(body || JSON.stringify({ decision: 'allow' }));
+      process.exit(0);
+    });
+  });
+  req.on('error', () => {
+    process.stdout.write(JSON.stringify({ decision: 'allow' }));
+    process.exit(0);
+  });
+  req.write(stdin);
+  req.end();
+} catch {
+  process.stdout.write(JSON.stringify({ decision: 'allow' }));
+  process.exit(0);
+}
+`;
+      fs.writeFileSync(path.join(agentsDir, 'termi-hook.js'), scriptContent, 'utf8');
+
+      const hooksPath = path.join(agentsDir, 'hooks.json');
+      let existing: Record<string, unknown> = {};
+      if (fs.existsSync(hooksPath)) {
+        try {
+          existing = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
+        } catch {
+          existing = {};
+        }
+      }
+      existing['termi-gate'] = {
+        PreToolUse: [
+          {
+            matcher: '*',
+            hooks: [
+              {
+                command: 'node termi-hook.js'
+              }
+            ]
+          }
+        ]
+      };
+      fs.writeFileSync(hooksPath, JSON.stringify(existing, null, 2), 'utf8');
+      this.hookInstalled = true;
+    } catch (err) {
+      this.emitEvent({ kind: 'terminal', line: `Hook file creation warning: ${String(err)}`, level: 'stderr' });
+    }
+  }
+
+  private handleHookCheck(data: Record<string, unknown>, res: http.ServerResponse): void {
+    const toolCall = (data.toolCall || {}) as { name?: string; args?: Record<string, unknown> };
+    const toolName = toolCall.name || 'Tool';
+    const input = toolCall.args || {};
+
+    const READ_ONLY_TOOLS = new Set([
+      'view_file',
+      'read_url_content',
+      'search_web',
+      'list_directory',
+      'list_dir',
+      'describe_task',
+      'list_tasks',
+      'status',
+      'fetch_web_page',
+    ]);
+
+    if (READ_ONLY_TOOLS.has(toolName) || this.alwaysAllowedTools.has(toolName)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ decision: 'allow' }));
+      return;
+    }
+
+    const requestId = 'agy-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    const { summary, detail } = describeTool(toolName, input);
+
+    this.pendingHooks.set(requestId, {
+      toolName,
+      resolve: (decision) => {
+        try {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(decision));
+        } catch {
+          // already ended
+        }
+      },
+    });
+
+    this.emitEvent({ kind: 'terminal', line: t('engine.approvalAsk', { tool: toolName, summary }), level: 'hook' });
+    this.emitEvent({
+      kind: 'permission_request',
+      requestId,
+      toolName,
+      summary,
+      detail,
+      input,
+      canAlways: true,
+    });
+  }
+
+  private cleanUpHookFiles(): void {
+    if (!this.hookInstalled) return;
+    this.hookInstalled = false;
+    try {
+      const agentsDir = path.join(this.opts.cwd, '.agents');
+      const scriptPath = path.join(agentsDir, 'termi-hook.js');
+      if (fs.existsSync(scriptPath)) fs.unlinkSync(scriptPath);
+
+      const hooksPath = path.join(agentsDir, 'hooks.json');
+      if (fs.existsSync(hooksPath)) {
+        let existing: Record<string, unknown> = {};
+        try {
+          existing = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
+        } catch {
+          existing = {};
+        }
+        delete existing['termi-gate'];
+        if (Object.keys(existing).length === 0) {
+          fs.unlinkSync(hooksPath);
+        } else {
+          fs.writeFileSync(hooksPath, JSON.stringify(existing, null, 2), 'utf8');
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 
   private modelCache: ModelChoice[] | null = null;

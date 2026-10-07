@@ -46,19 +46,30 @@ export function assistantTerminalLines(text: string, prefix = ''): EngineEvent[]
 export function describeTool(toolName: string, input: Record<string, unknown>): { summary: string; detail: string } {
   const s = (v: unknown) => (typeof v === 'string' ? v : v === undefined ? '' : JSON.stringify(v));
   switch (toolName) {
-    case 'Bash': {
-      const cmd = s(input.command);
-      const desc = s(input.description);
+    case 'Bash':
+    case 'run_command': {
+      const cmd = s(input.CommandLine || input.command);
+      const desc = s(input.toolSummary || input.description || input.toolAction);
       return { summary: desc || cmd.slice(0, 120), detail: cmd };
     }
-    case 'Write': {
-      const content = s(input.content);
-      return { summary: t('tool.write', { path: s(input.file_path) }), detail: content.length > 1200 ? content.slice(0, 1200) + '\n…' : content };
+    case 'Write':
+    case 'write_to_file': {
+      const content = s(input.CodeContent || input.content);
+      const filePath = s(input.TargetFile || input.file_path);
+      return { summary: t('tool.write', { path: filePath }), detail: content.length > 1200 ? content.slice(0, 1200) + '\n…' : content };
     }
     case 'Edit':
-      return { summary: t('tool.edit', { path: s(input.file_path) }), detail: t('tool.editDetail', { old: s(input.old_string).slice(0, 600), new: s(input.new_string).slice(0, 600) }) };
+    case 'replace_file_content': {
+      const filePath = s(input.TargetFile || input.file_path);
+      const oldStr = s(input.TargetContent || input.old_string).slice(0, 600);
+      const newStr = s(input.ReplacementContent || input.new_string).slice(0, 600);
+      return { summary: t('tool.edit', { path: filePath }), detail: t('tool.editDetail', { old: oldStr, new: newStr }) };
+    }
     case 'Read':
-      return { summary: t('tool.read', { path: s(input.file_path) }), detail: s(input.file_path) };
+    case 'view_file': {
+      const filePath = s(input.AbsolutePath || input.file_path);
+      return { summary: t('tool.read', { path: filePath }), detail: filePath };
+    }
     case 'Glob':
     case 'Grep':
       return { summary: t('tool.search', { pattern: s(input.pattern) }), detail: JSON.stringify(input, null, 2) };
