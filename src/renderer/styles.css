@@ -38,8 +38,6 @@ pre, code { font-family: Consolas, "Cascadia Mono", monospace; }
 .brand-title { font-size: 18px; font-weight: 700; }
 .brand-sub { color: var(--muted); font-size: 12px; }
 .topbar-right { display: flex; align-items: center; gap: 18px; }
-.chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: 12px; }
-.chip.active { border-color: var(--accent); color: var(--text); background: rgba(47,123,255,.12); }
 .persona { display: flex; align-items: center; gap: 6px; }
 .persona-label { color: var(--muted); font-size: 12px; margin-right: 4px; }
 .seg { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: 12px; }
@@ -170,13 +168,6 @@ body.resizing iframe, body.resizing .messages { pointer-events: none; }
 .t-thinking { color: #64748b; font-style: italic; }
 .t-user { color: #c4b5fd; }
 .t-time { color: #4b5b78; }
-.cards { padding: 10px 28px 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; overflow-y: auto; }
-.card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); padding: 16px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
-.card:hover { border-color: rgba(47,123,255,.5); }
-.card.active { border-color: var(--accent); background: rgba(47,123,255,.12); }
-.card .card-ico { font-size: 24px; }
-.card .card-title { font-weight: 600; }
-.card .card-sub { color: var(--muted); font-size: 12px; line-height: 1.4; }
 
 /* Explorer */
 .explorer { min-width: 0; display: flex; flex-direction: column; min-height: 0; background: #0c1526; }

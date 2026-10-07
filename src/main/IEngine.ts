@@ -12,6 +12,11 @@ export interface IEngine extends EventEmitter {
   /** Switch model. Returns true if done live, false if the caller must restart the engine. */
   setModel(model?: string): Promise<boolean>;
 
+  /** False once the backend process has died; the caller then restarts the engine before sending. */
+  isAlive?(): boolean;
+  /** True if interrupt() can only be done by ending the session, so the caller must restart afterwards. */
+  readonly restartOnInterrupt?: boolean;
+
   // EventEmitter methods
   on(eventName: 'event', listener: (ev: EngineEvent) => void): this;
   once(eventName: 'event', listener: (ev: EngineEvent) => void): this;

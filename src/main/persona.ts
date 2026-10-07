@@ -1,13 +1,12 @@
-// Persona variants. Both are appended to the normal Claude Code system prompt; the CaptAIn
-// workspace's CLAUDE.md still defines who CaptAIn is — these only adjust tone and the facts
+// Persona variants. Both are appended to the normal Claude Code system prompt; the workspace's
+// CLAUDE.md still defines who the agent is — these only adjust tone and the facts
 // about this surface (Freigabe-Karten instead of terminal prompts, drag & drop paths).
 import type { Persona } from './config';
 
 const SURFACE_NOTE = `
-Du läufst in der Desktop-Oberfläche „CaptAIn für alle" (Proof of Concept), nicht im Terminal.
+Du läufst in der Desktop-Oberfläche „Termi", nicht im Terminal.
 - Freigaben erscheinen für den Nutzer als Karte mit den Schaltflächen „Freigeben" und „Ablehnen". Verweise darauf („bitte in der Freigabe-Karte freigeben"), nie auf Terminal-Eingaben oder Tastenkürzel.
 - Dateien und Ordner, die der Nutzer per Drag & Drop eingefügt hat, stehen in der Nachricht als [Datei: Pfad] bzw. [Ordner: Pfad]. Verwende den Pfad direkt; frage nicht erneut danach. Per Drag & Drop eingefügte Webadressen stehen als [Link: URL].
-- Ist in der Nachricht ein aktives Projekt vermerkt ([Projekt: NAME]), gilt es für die Anfrage, ohne Rückfrage.
 - Antworte auf Deutsch, wenn der Nutzer Deutsch schreibt.
 `;
 

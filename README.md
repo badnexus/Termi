@@ -12,7 +12,8 @@ Agentic RAGs and AI CLI tools are incredibly powerful, but interacting with them
 - **Full CLI Support Under the Hood:** The interface wraps the CLI perfectly. You still get 100% of the underlying agent's capabilities (executing commands, reading files, searching the web).
 - **Native File Explorer:** A built-in file explorer allows you to effortlessly drag and drop files and folders directly into the chat. The path is automatically resolved and inserted.
 - **Approval Cards (Human-in-the-Loop):** Nothing with external impact happens without your explicit approval. The agent proposes actions (like executing a bash script or editing a file), and you get a clean UI card to approve or deny it.
-- **Skill Chips & Learning Paths:** Quickly access the tools your agent is equipped with via clickable chips and guided tutorials.
+- **Skill Chips:** Quickly access the tools your agent is equipped with via clickable chips.
+- **Model Picker:** Choose the model from a dropdown. With the Antigravity CLI (gy), the list comes from `agy models`; with Claude it comes from the SDK.
 - **Bilingual Support:** Full interface localization for English and German.
 
 ## 🚀 Getting Started

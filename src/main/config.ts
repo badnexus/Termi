@@ -1,4 +1,4 @@
-// POC configuration: where the CaptAIn workspace lives, what the Datei-Explorer shows, which persona.
+// App configuration: where the agent workspace lives, what the Datei-Explorer shows, which persona.
 // Dev: config.json next to package.json. Packaged app: %APPDATA%/<productName>/config.json, seeded
 // from the bundled config.json on first start (the app.asar archive is read-only).
 // Missing or invalid keys fall back to the defaults below.
@@ -7,13 +7,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { LANGUAGES, type Language } from './i18n';
 
-export type Persona = 'captain' | 'soft';
+export type Persona = 'standard' | 'soft';
 export type EngineType = 'claude' | 'agy' | 'gpts';
 
 export interface PocConfig {
   /** The backend engine to use ('claude' for Claude SDK, 'agy' for Antigravity, 'gpts' for GPTS). */
   engineType: EngineType;
-  /** Name of the agent displayed in the UI. Defaults to 'CaptAIn'. */
+  /** Name of the agent displayed in the UI. Defaults to 'Assistant'. */
   agentName: string;
   /** Path to the workspace (CLAUDE.md, .claude/skills, project-map/, connectors/). */
   workspaceRepo: string;
@@ -24,7 +24,7 @@ export interface PocConfig {
    * hook already opens the session with the welcome menu. Turn on only if that hook is absent.
    */
   greetOnStart: boolean;
-  /** 'captain' = CaptAIn as in the CLI; 'soft' = fewer technical terms, shorter sentences. */
+  /** 'standard' = the agent as in the CLI; 'soft' = fewer technical terms, shorter sentences. */
   persona: Persona;
   /** UI language. Omit to follow the OS language (German locale -> 'de', otherwise 'en'). Set by the DE|EN switch. */
   language?: Language;
@@ -43,15 +43,15 @@ const CONFIG_PATH = app.isPackaged ? path.join(app.getPath('userData'), 'config.
 
 const DEFAULTS: PocConfig = {
   engineType: 'claude',
-  agentName: 'CaptAIn',
+  agentName: 'Assistant',
   workspaceRepo: path.join(app.getPath('home'), '.my-agent-skills'),
   workspaceRoot: app.isPackaged ? app.getPath('documents') : path.resolve(POC_ROOT, '..'),
   greetOnStart: false,
-  persona: 'captain',
+  persona: 'standard',
 };
 
 const ENGINE_TYPES: EngineType[] = ['claude', 'agy', 'gpts'];
-const PERSONAS: Persona[] = ['captain', 'soft'];
+const PERSONAS: Persona[] = ['standard', 'soft'];
 
 function readJson(file: string): Partial<PocConfig> | null {
   try {
@@ -68,6 +68,8 @@ export function loadConfig(): PocConfig {
   if ('captainRepo' in raw && !raw.workspaceRepo) {
     raw.workspaceRepo = (raw as { captainRepo?: string }).captainRepo;
   }
+  // Legacy persona name
+  if ((raw as { persona?: string }).persona === 'captain') raw.persona = 'standard';
   const cfg: PocConfig = { ...DEFAULTS, ...raw };
   if (!ENGINE_TYPES.includes(cfg.engineType)) cfg.engineType = DEFAULTS.engineType;
   if (!PERSONAS.includes(cfg.persona)) cfg.persona = DEFAULTS.persona;
@@ -83,11 +85,18 @@ export function loadConfig(): PocConfig {
 export function saveConfig(cfg: PocConfig): boolean {
   try {
     fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    // A hand-edited file with a syntax error would be overwritten by defaults: keep a copy first.
+    if (fs.existsSync(CONFIG_PATH) && readJson(CONFIG_PATH) === null) fs.copyFileSync(CONFIG_PATH, CONFIG_PATH + '.bak');
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
     return true;
   } catch {
     return false;
   }
+}
+
+/** True if config.json exists but could not be parsed (defaults are used; a .bak copy is kept on save). */
+export function configIsBroken(): boolean {
+  return fs.existsSync(CONFIG_PATH) && readJson(CONFIG_PATH) === null;
 }
 
 export function configPath(): string {

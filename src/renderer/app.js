@@ -1,8 +1,8 @@
-/* CaptAIn für alle – renderer. Plain JS on purpose (no build step for the UI).
-   Talks to the engine only through window.captain (see preload.ts). */
+/* Termi – renderer. Plain JS on purpose (no build step for the UI).
+   Talks to the engine only through window.termi (see preload.ts). */
 (() => {
   const $ = (id) => document.getElementById(id);
-  const api = window.captain;
+  const api = window.termi;
   const md = window.marked;
   const refs = window.refs;
   const i18n = window.i18n;
@@ -10,26 +10,26 @@
   md.setOptions({ breaks: true, gfm: true });
   
   function translateUI() {
-    const vars = { agent: state.agentName || 'CaptAIn' };
+    const vars = { agent: state.agentName || 'Assistant' };
     document.querySelectorAll('[data-i18n]').forEach((el) => {
       const key = el.dataset.i18n;
       if (el.dataset.placeholder !== undefined) {
         el.dataset.placeholder = t(key, vars);
+      } else if (el.id === 'send') {
+        el.title = t(key, vars); // keep the ➤ icon, only translate the tooltip
       } else {
         el.textContent = t(key, vars);
       }
     });
     if (state.ready) {
       renderQuick();
-      renderLernpfade();
     }
   }
 
   // ---------- state ----------
   const state = {
     view: 'chat',
-    project: null,          // { slug, name }
-    persona: 'captain',
+    persona: 'standard',
     dir: null,
     busy: false,
     ready: false,
@@ -48,19 +48,11 @@
     { skill: 'update-ticket', key: 'update_ticket' },
     { skill: 'create-status-report', key: 'status' },
     { skill: 'create-vcycle-report', key: 'vcycle' },
-    { skill: 'ask-project', key: 'ask' },
     { skill: 'write-document', key: 'doc' },
     { skill: 'review-document', key: 'review' },
     { skill: 'create-spreadsheet', key: 'excel' },
     { skill: 'review-spreadsheet', key: 'review_excel' },
-    { skill: 'add-project', key: 'add_project' },
     { skill: 'setup', key: 'setup' },
-  ];
-
-  const LERNPFADE = [
-    { skill: 'create-status-report', ico: '📊', key: 'status' },
-    { skill: 'create-ticket-dsw', ico: '🎫', key: 'ticket' },
-    { skill: 'review-document', ico: '📝', key: 'review' },
   ];
 
   const FILE_ICONS = { py: '🐍', md: '📝', txt: '📄', docx: '📘', doc: '📘', xlsx: '📗', xls: '📗', csv: '📊', pdf: '📕', json: '🧾', yaml: '🧾', yml: '🧾', jpeg: '🖼️', jpg: '🖼️', png: '🖼️', svg: '🖼️', ps1: '⚙️', js: '📜', ts: '📜', html: '🌐', zip: '🗜️' };
@@ -68,7 +60,6 @@
   const now = () => new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
-  const projectName = () => (state.project ? state.project.name : t('projects.none_selected'));
 
   // ---------- views ----------
   function showView(view) {
@@ -110,7 +101,7 @@
     if (state.current) return state.current;
     const el = document.createElement('div');
     el.className = 'msg';
-    el.innerHTML = `<div class="avatar">🤖</div><div class="bubble"><div class="meta"><b>${state.agentName || 'CaptAIn'}</b><span>${now()}</span></div><div class="md cursor"></div></div>`;
+    el.innerHTML = `<div class="avatar">🤖</div><div class="bubble"><div class="meta"><b>${state.agentName || 'Assistant'}</b><span>${now()}</span></div><div class="md cursor"></div></div>`;
     messages.appendChild(el);
     state.current = { el, body: el.querySelector('.md'), raw: '', rendered: false };
     scrollDown();
@@ -338,22 +329,21 @@
     sendBtn.textContent = busy ? '■' : '➤';
     sendBtn.title = state.busy ? t('chat.stop') : t('chat.send');
     updateModelSelectState();
-    setStatus(busy ? 'busy' : state.ready ? 'ready' : '', busy ? t('status.busy', {agent: state.agentName || 'CaptAIn'}) : state.ready ? t('status.ready') : t('status.starting'));
+    setStatus(busy ? 'busy' : state.ready ? 'ready' : '', busy ? t('status.busy', {agent: state.agentName || 'Assistant'}) : state.ready ? t('status.ready') : t('status.starting'));
   }
 
   function send() {
     const text = composerText();
     if (!text || !state.ready) return;
-    const prefix = state.project ? `[Projekt: ${state.project.name}] ` : '';
     addUser(text);
-    api.send(prefix + text);
+    api.send(text);
     clearInput();
     setBusy(true);
   }
 
   function prefill(phrase) {
     showView('chat');
-    setText(phrase.replaceAll('{P}', projectName()));
+    setText(phrase);
   }
 
   // Drag & drop into the composer: local paths are resolved by the app itself (no model call).
@@ -368,7 +358,7 @@
     const point = inInput(atPoint) ? atPoint : inInput(currentRange()) ? currentRange() : null;
 
     const items = []; // { kind, target } or { text }
-    const internal = dt.getData('application/x-captain-entry');
+    const internal = dt.getData('application/x-termi-entry');
     let entry = null;
     try { entry = internal ? JSON.parse(internal) : null; } catch { entry = null; }
     if (entry && entry.path) {
@@ -400,7 +390,7 @@
     insertNodes(nodes, point);
   });
 
-  // ---------- skill menu & Lernpfade ----------
+  // ---------- skill menu ----------
   // Only skills the connected workspace really has: the engine's list, else the app's own scan.
   // Nothing connected (or no known skill) -> no chips at all.
   const availableSkills = () => new Set(state.engineSkills.length ? state.engineSkills : state.workspaceSkills);
@@ -412,7 +402,7 @@
     for (const s of SKILLS) {
       if (!known.has(s.skill)) continue;
       const b = document.createElement('button');
-      const phrase = t('skill.' + s.key + '.phrase').replaceAll('{P}', projectName());
+      const phrase = t('skill.' + s.key + '.phrase');
       b.textContent = t('skill.' + s.key + '.label');
       b.title = phrase;
       b.addEventListener('click', () => prefill(phrase));
@@ -420,53 +410,6 @@
     }
     q.hidden = q.childElementCount === 0;
   }
-  function renderLernpfade() {
-    const c = $('lernpfade');
-    c.innerHTML = '';
-    const known = availableSkills();
-    for (const l of LERNPFADE) {
-      if (!known.has(l.skill)) continue;
-      const card = document.createElement('div');
-      card.className = 'card';
-      const title = t('lp.' + l.key + '.title');
-      const sub = t('lp.' + l.key + '.sub');
-      const phrase = t('lp.' + l.key + '.phrase');
-      card.innerHTML = `<div class="card-ico">${l.ico}</div><div class="card-title">${esc(title)}</div><div class="card-sub">${esc(sub)}</div>`;
-      card.addEventListener('click', () => prefill(phrase));
-      c.appendChild(card);
-    }
-    if (!c.childElementCount) c.innerHTML = `<div class="empty">${t('learning.empty')}</div>`;
-  }
-
-  // ---------- projects ----------
-  async function renderProjects() {
-    const c = $('projects');
-    let list;
-    try {
-      list = await api.listProjects();
-    } catch (err) {
-      c.innerHTML = `<div class="empty">${esc(t('projects.error', {err: err.message || err}))}</div>`;
-      return;
-    }
-    c.innerHTML = '';
-    if (!list.length) { c.innerHTML = `<div class="empty">${esc(t('projects.empty', {agent: state.agentName || 'CaptAIn'}))}</div>`; return; }
-    for (const p of list) {
-      const card = document.createElement('div');
-      card.className = 'card' + (state.project && state.project.slug === p.slug ? ' active' : '');
-      card.innerHTML = `<div class="card-ico">🗂️</div><div class="card-title">${esc(p.name)}</div><div class="card-sub">${esc(p.description || '')}${p.projectUrl ? `<br>URL: ${esc(p.projectUrl)}` : ''}</div>`;
-      card.addEventListener('click', () => {
-        state.project = { slug: p.slug, name: p.name };
-        const chip = $('project-chip');
-        chip.textContent = t('projects.selected', {name: p.name});
-        chip.classList.add('active');
-        renderProjects();
-        renderQuick();
-        termLine(`Aktives Projekt: ${p.name}`, 'info');
-      });
-      c.appendChild(card);
-    }
-  }
-
   // ---------- explorer ----------
   async function renderDir(dir) {
     let listing;
@@ -503,7 +446,7 @@
       el.title = e.path;
       el.innerHTML = `<div class="f-ico">${e.isDir ? '📁' : FILE_ICONS[e.ext] || '📄'}</div><div class="f-name">${esc(e.name)}</div><div class="f-sub">${e.isDir ? `${e.size} ${t('explorer.items')}` : fmtSize(e.size)}</div>`;
       el.addEventListener('dragstart', (ev) => {
-        ev.dataTransfer.setData('application/x-captain-entry', JSON.stringify({ path: e.path, isDir: e.isDir }));
+        ev.dataTransfer.setData('application/x-termi-entry', JSON.stringify({ path: e.path, isDir: e.isDir }));
         ev.dataTransfer.setData('text/plain', e.path);
         ev.dataTransfer.effectAllowed = 'copy';
       });
@@ -657,7 +600,7 @@
       state.ready = false;
       finishAssistant();
       setStatus('', t('status.changing_persona'));
-      termLine(`Ansprache gewechselt: ${state.persona === 'soft' ? t('persona.soft') : (state.agentName || 'CaptAIn')} – neue Sitzung`, 'info');
+      termLine(`Ansprache gewechselt: ${state.persona === 'soft' ? t('persona.soft') : t('persona.standard')} – neue Sitzung`, 'info');
       await api.setPersona(state.persona);
     }),
   );
@@ -668,16 +611,15 @@
       case 'ready':
         if (state.ready) break;
         state.ready = true;
-        setStatus(state.busy ? 'busy' : 'ready', state.busy ? t('status.busy', {agent: state.agentName || 'CaptAIn'}) : t('status.ready'));
+        setStatus(state.busy ? 'busy' : 'ready', state.busy ? t('status.busy', {agent: state.agentName || 'Assistant'}) : t('status.ready'));
         refreshModels(state.configuredModel || '');
         break;
       case 'init':
         state.ready = true;
         state.engineSkills = ev.skills || [];
         renderQuick();
-        renderLernpfade();
-        refreshModels(state.configuredModel || '');
-        setStatus(state.busy ? 'busy' : 'ready', state.busy ? t('status.busy', {agent: state.agentName || 'CaptAIn'}) : `${t('status.ready')} · ${ev.model}`);
+          refreshModels(state.configuredModel || '');
+        setStatus(state.busy ? 'busy' : 'ready', state.busy ? t('status.busy', {agent: state.agentName || 'Assistant'}) : `${t('status.ready')} · ${ev.model}`);
         break;
       case 'text_start':
         ensureAssistant();
@@ -732,14 +674,12 @@
   // ---------- boot ----------
   (async () => {
     const cfg = await api.getConfig();
-    state.agentName = cfg.agentName || 'CaptAIn';
+    state.agentName = cfg.agentName || 'Assistant';
     
     // Update static DOM elements with the dynamic agent name
-    document.title = `${state.agentName} für alle – Proof of Concept`;
+    document.title = 'Termi - Assistant for all';
     const brandTitle = document.querySelector('.brand-title');
-    if (brandTitle) brandTitle.textContent = state.agentName;
-    const btnCapt = document.querySelector('[data-persona="captain"]');
-    if (btnCapt) btnCapt.textContent = state.agentName;
+    if (brandTitle) brandTitle.textContent = 'Termi';
 
     state.configuredModel = cfg.model || '';
     if (cfg.runtime && cfg.runtime.skipPermissions) {
@@ -763,13 +703,11 @@
       });
     });
 
-    state.persona = cfg.persona || 'captain';
+    state.persona = cfg.persona || 'standard';
     document.querySelectorAll('.seg').forEach((x) => x.classList.toggle('active', x.dataset.persona === state.persona));
     if (cfg.greetOnStart) setBusy(true); // the greeting turn is already on its way
     try { state.workspaceSkills = (await api.listSkills()) || []; } catch { state.workspaceSkills = []; }
     renderQuick();
-    renderLernpfade();
-    renderProjects();
     renderDir(cfg.workspaceRoot);
     input.focus();
   })();

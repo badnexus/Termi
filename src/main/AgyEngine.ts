@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { IEngine } from './IEngine';
@@ -17,6 +17,12 @@ export class AgyEngine extends EventEmitter implements IEngine {
   private toolNames = new Map<string, string>();
   /** A message was sent and its 'result' has not arrived yet. */
   private turnOpen = false;
+  private exited = false;
+  readonly restartOnInterrupt = true;
+
+  isAlive(): boolean {
+    return Boolean(this.proc) && !this.exited && Boolean(this.proc?.stdin?.writable);
+  }
 
   constructor(private readonly opts: EngineOptions) {
     super();
@@ -55,7 +61,8 @@ export class AgyEngine extends EventEmitter implements IEngine {
       : spawn(exe, args, { cwd: this.opts.cwd, windowsHide: true });
 
     this.proc.on('error', (err: NodeJS.ErrnoException) => {
-      this.emitEvent({ kind: 'error', text: err.code === 'ENOENT' ? t('agy.notFound') : t('agy.startFailed', { e: String(err) }) });
+      this.exited = true;
+      this.emitEvent({ kind: 'error', text: err.code === 'ENOENT' ? (fs.existsSync(this.opts.cwd) ? t('agy.notFound') : t('agy.badCwd', { cwd: this.opts.cwd })) : t('agy.startFailed', { e: String(err) }) });
     });
     this.proc.stdin?.on('error', (err) => {
       this.emitEvent({ kind: 'terminal', line: `stdin: ${String(err)}`, level: 'stderr' });
@@ -74,6 +81,7 @@ export class AgyEngine extends EventEmitter implements IEngine {
     });
 
     this.proc.on('close', (code) => {
+      this.exited = true;
       if (this.stdoutRest) this.handleLine(this.stdoutRest);
       this.stdoutRest = '';
       this.emitEvent({ kind: 'status', text: t('agy.exited', { code: String(code) }) });
@@ -85,7 +93,7 @@ export class AgyEngine extends EventEmitter implements IEngine {
     // agy has no init handshake we wait for; the UI may send as soon as the process is spawned.
     this.emitEvent({
       kind: 'init',
-      model: this.opts.model || 'gemini',
+      model: this.opts.model || 'default',
       version: 'agy-cli',
       permissionMode: this.opts.skipPermissions ? 'bypassPermissions' : 'default',
       skills: [],
@@ -192,7 +200,12 @@ export class AgyEngine extends EventEmitter implements IEngine {
 
   async interrupt(): Promise<void> {
     // agy's stream-json input has no known interrupt event; ending the process is the only reliable stop.
+    // The caller restarts the engine afterwards (restartOnInterrupt); here the UI is unlocked first.
     this.emitEvent({ kind: 'terminal', line: t('agy.noInterrupt'), level: 'info' });
+    if (this.turnOpen) {
+      this.turnOpen = false;
+      this.emitEvent({ kind: 'result', costUsd: 0, durationMs: 0, numTurns: 0, isError: true });
+    }
   }
 
   answerPermission(requestId: string, allow: boolean, always: boolean): void {
@@ -201,11 +214,36 @@ export class AgyEngine extends EventEmitter implements IEngine {
     this.emitEvent({ kind: 'terminal', line: `${allow ? t('engine.allowed') : t('engine.denied')} (${requestId.slice(0, 8)})`, level: 'hook' });
   }
 
-  async listModels(): Promise<ModelChoice[]> {
-    const models = new Set(this.opts.availableModels ?? []);
-    if (this.opts.model) models.add(this.opts.model);
-    return [...models].map((m) => ({ value: m, displayName: m }));
+  private modelCache: ModelChoice[] | null = null;
+
+  /** `agy models` prints "<id>\t<Display Name>" per line on stdout (progress text goes to stderr). */
+  private fetchAgyModels(): Promise<ModelChoice[]> {
+    if (this.modelCache) return Promise.resolve(this.modelCache);
+    const exe = findOnPath('agy');
+    if (!exe) return Promise.resolve([]);
+    return new Promise((resolve) => {
+      const cb = (err: Error | null, stdout: string) => {
+        if (err) {
+          this.emitEvent({ kind: 'terminal', line: t('agy.modelListFailed', { e: String(err) }), level: 'stderr' });
+          resolve([]);
+          return;
+        }
+        this.modelCache = parseAgyModels(stdout);
+        resolve(this.modelCache);
+      };
+      const opts = { cwd: this.opts.cwd, timeout: 15000, windowsHide: true };
+      if (/\.(cmd|bat)$/i.test(exe)) execFile(`"${exe}" models`, [], { ...opts, shell: true }, (e, out) => cb(e, String(out)));
+      else execFile(exe, ['models'], opts, (e, out) => cb(e, String(out)));
+    });
   }
+
+  async listModels(): Promise<ModelChoice[]> {
+    const found = await this.fetchAgyModels();
+    const list = found.length ? [...found] : (this.opts.availableModels ?? []).map((m) => ({ value: m, displayName: m }));
+    if (this.opts.model && !list.some((m) => m.value === this.opts.model)) list.push({ value: this.opts.model, displayName: this.opts.model });
+    return list;
+  }
+
 
   async setModel(): Promise<boolean> {
     return false; // --model is a launch argument: the caller restarts the engine
@@ -214,6 +252,17 @@ export class AgyEngine extends EventEmitter implements IEngine {
 
 /** Model names like "gemini-3-pro", "models/gemini:latest" – nothing a shell could interpret. */
 const SAFE_ARG = /^[\w.:/@-]+$/;
+
+/** Parse `agy models` stdout: "<id>\t<Display Name>" per line; lines without a safe id are skipped. */
+export function parseAgyModels(stdout: string): ModelChoice[] {
+  const out: ModelChoice[] = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    const [id, ...rest] = line.trim().split(/\t+/);
+    if (!id || !SAFE_ARG.test(id)) continue;
+    out.push({ value: id, displayName: rest.join(' ').trim() || id });
+  }
+  return out;
+}
 
 /** Locate a command the way the shell would (PATH × PATHEXT on Windows). */
 function findOnPath(cmd: string): string | null {

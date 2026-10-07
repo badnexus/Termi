@@ -1,14 +1,13 @@
-// Electron main process: one window, one CaptAIn engine, a thin IPC layer in between.
+// Electron main process: one window, one agent engine, a thin IPC layer in between.
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { loadConfig, saveConfig, configPath, POC_ROOT, type PocConfig, type Persona } from './config';
+import { loadConfig, saveConfig, configIsBroken, configPath, POC_ROOT, type PocConfig, type Persona } from './config';
 import type { EngineEvent } from './EngineTypes';
 import type { IEngine } from './IEngine';
 import { ClaudeEngine } from './ClaudeEngine';
 import { AgyEngine } from './AgyEngine';
 import { GptsEngine } from './GptsEngine';
-import { listProjects } from './projects';
 import { listWorkspaceSkills } from './skills';
 import { listDir, statPath } from './files';
 import { systemPromptAppend } from './persona';
@@ -63,9 +62,15 @@ function bundledClaudeExecutable(): string | undefined {
   }
 }
 
+/** The configured workspace if it exists, otherwise the first existing fallback folder. */
+function resolveCwd(): string {
+  return [cfg.workspaceRepo, cfg.workspaceRoot, app.getPath('home')].find((p) => p && fs.existsSync(p)) ?? app.getPath('home');
+}
+
 function createEngine(): IEngine {
+  const cwd = resolveCwd();
   const common = {
-    cwd: cfg.workspaceRepo,
+    cwd,
     model: cfg.model,
     agentName: cfg.agentName,
     skipPermissions: SKIP_PERMISSIONS,
@@ -98,13 +103,16 @@ async function startEngine(): Promise<void> {
   engine = null;
   if (old) await old.stop();
 
+  if (configIsBroken()) {
+    sendToUi({ kind: 'terminal', line: t('err.configBroken', { path: configPath() }), level: 'stderr' });
+  }
   if (!fs.existsSync(cfg.workspaceRepo)) {
-    sendToUi({ kind: 'terminal', line: t('err.workspaceMissing', { repo: cfg.workspaceRepo, config: configPath() }), level: 'stderr' });
+    sendToUi({ kind: 'terminal', line: t('err.workspaceMissing', { repo: cfg.workspaceRepo, config: configPath(), cwd: resolveCwd() }), level: 'info' });
   }
 
   engine = createEngine();
   engine.on('event', sendToUi);
-  const devSend = process.env.CAPTAIN_POC_SEND;
+  const devSend = process.env.TERMI_SEND;
   if (devSend) {
     engine.once('event', function waitForInit(this: IEngine, ev: EngineEvent) {
       if (ev.kind === 'init') {
@@ -133,7 +141,7 @@ function createWindow(): void {
       sandbox: false,
     },
   });
-  // Links from CaptAIn's answers (tickets, reports) open in the system browser, never in-app.
+  // Links from the agent's answers (tickets, reports) open in the system browser, never in-app.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
@@ -144,21 +152,21 @@ function createWindow(): void {
   });
 
   // Dev aid for checking the UI without a human at the screen:
-  //   CAPTAIN_POC_SCREENSHOT=<file.png>           capture the chat after CAPTAIN_POC_SCREENSHOT_DELAY ms
-  //   CAPTAIN_POC_SCREENSHOT_TERMINAL=<file.png>  then switch to the Terminal view and capture again
-  //   CAPTAIN_POC_SEND=<text>                     send one message once the engine is ready
-  //   CAPTAIN_POC_AUTOQUIT=1                      quit afterwards (pending Freigabe-Karten stay unanswered,
+  //   TERMI_SCREENSHOT=<file.png>           capture the chat after TERMI_SCREENSHOT_DELAY ms
+  //   TERMI_SCREENSHOT_TERMINAL=<file.png>  then switch to the Terminal view and capture again
+  //   TERMI_SEND=<text>                     send one message once the engine is ready
+  //   TERMI_AUTOQUIT=1                      quit afterwards (pending Freigabe-Karten stay unanswered,
   //                                               so nothing is ever executed by this mode)
-  const shot = process.env.CAPTAIN_POC_SCREENSHOT;
+  const shot = process.env.TERMI_SCREENSHOT;
   if (shot) {
-    const delay = Number(process.env.CAPTAIN_POC_SCREENSHOT_DELAY ?? '15000');
+    const delay = Number(process.env.TERMI_SCREENSHOT_DELAY ?? '15000');
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     win.webContents.once('did-finish-load', () => {
       setTimeout(async () => {
         try {
           const img = await win?.webContents.capturePage();
           if (img) fs.writeFileSync(shot, img.toPNG());
-          const termShot = process.env.CAPTAIN_POC_SCREENSHOT_TERMINAL;
+          const termShot = process.env.TERMI_SCREENSHOT_TERMINAL;
           if (termShot && win) {
             win.webContents.send('ui:showView', 'terminal');
             await sleep(800);
@@ -166,7 +174,7 @@ function createWindow(): void {
             fs.writeFileSync(termShot, img2.toPNG());
           }
         } finally {
-          if (process.env.CAPTAIN_POC_AUTOQUIT) app.quit();
+          if (process.env.TERMI_AUTOQUIT) app.quit();
         }
       }, delay);
     });
@@ -176,7 +184,6 @@ function createWindow(): void {
 // --- IPC: everything the renderer may ask for --------------------------------------------
 
 ipcMain.handle('config:get', () => ({ ...cfg, language: getLanguage(), runtime: { skipPermissions: SKIP_PERMISSIONS, configPath: configPath() } }));
-ipcMain.handle('projects:list', () => listProjects(cfg.workspaceRepo));
 ipcMain.handle('skills:list', () => listWorkspaceSkills(cfg.workspaceRepo));
 ipcMain.handle('files:list', (_e, dir?: string) => listDir(dir || cfg.workspaceRoot));
 ipcMain.handle('files:stat', (_e, p: string) => statPath(p));
@@ -195,10 +202,20 @@ ipcMain.handle('shell:openExternal', (_e, url: string) => {
   return Promise.resolve();
 });
 ipcMain.on('chat:send', (_e, text: string) => {
+  // A backend process that died (crash, closed externally) is restarted transparently before sending.
+  if (engine && engine.isAlive && !engine.isAlive()) {
+    void restartEngine().then(() => (engine ? engine.send(text) : sendToUi({ kind: 'error', text: t('err.engineNotRunning') })));
+    return;
+  }
   if (engine) engine.send(text);
   else sendToUi({ kind: 'error', text: t('err.engineNotRunning') });
 });
-ipcMain.on('chat:interrupt', () => void engine?.interrupt());
+ipcMain.on('chat:interrupt', () => {
+  void (async () => {
+    await engine?.interrupt();
+    if (engine?.restartOnInterrupt) await restartEngine();
+  })();
+});
 ipcMain.on('permission:answer', (_e, a: { requestId: string; allow: boolean; always: boolean }) =>
   engine?.answerPermission(a.requestId, a.allow, Boolean(a.always)),
 );

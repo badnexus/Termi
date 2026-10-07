@@ -1,8 +1,6 @@
 {
   "engineType": "agy",
-  "agentName": "Agentic RAG",
-  "workspaceRepo": "G:/myProjects/agentic/RAG",
-  "workspaceRoot": "C:/place/where/should/start/working",
+  "agentName": "Assistant",
   "greetOnStart": false,
-  "persona": "soft"
+  "persona": "standard"
 }

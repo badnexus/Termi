@@ -4,7 +4,6 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 const api = {
   getConfig: () => ipcRenderer.invoke('config:get'),
-  listProjects: () => ipcRenderer.invoke('projects:list'),
   listSkills: () => ipcRenderer.invoke('skills:list'),
   listDir: (dir?: string) => ipcRenderer.invoke('files:list', dir),
   chooseFolder: () => ipcRenderer.invoke('files:chooseFolder'),
@@ -16,7 +15,7 @@ const api = {
   interrupt: () => ipcRenderer.send('chat:interrupt'),
   answerPermission: (requestId: string, allow: boolean, always = false) =>
     ipcRenderer.send('permission:answer', { requestId, allow, always }),
-  setPersona: (persona: 'captain' | 'soft') => ipcRenderer.invoke('persona:set', persona),
+  setPersona: (persona: 'standard' | 'soft') => ipcRenderer.invoke('persona:set', persona),
   restart: () => ipcRenderer.invoke('engine:restart'),
   listModels: () => ipcRenderer.invoke('models:list'),
   setModel: (model: string) => ipcRenderer.invoke('models:set', model),
@@ -36,5 +35,5 @@ const api = {
   },
 };
 
-contextBridge.exposeInMainWorld('captain', api);
-export type CaptainApi = typeof api;
+contextBridge.exposeInMainWorld('termi', api);
+export type TermiApi = typeof api;

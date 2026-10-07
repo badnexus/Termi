@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
-  <title>CaptAIn für alle – Proof of Concept</title>
+  <title>Termi - Assistant for all</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -11,15 +11,14 @@
     <div class="brand">
       <div class="logo">&gt;_</div>
       <div>
-        <div class="brand-title">CaptAIn</div>
-        <div class="brand-sub" data-i18n="brand.sub">Dein Projektassistent – einfach erklärt.</div>
+        <div class="brand-title">Termi</div>
+        <div class="brand-sub" data-i18n="brand.sub">Dein Assistent – einfach erklärt.</div>
       </div>
     </div>
     <div class="topbar-right">
-      <div class="chip" id="project-chip" title="Aktives Projekt (unter Projekte wählen)" data-i18n="projects.none_selected">Kein Projekt gewählt</div>
       <div class="persona" title="Ansprache wählen">
         <span class="persona-label" data-i18n="persona.label">Ansprache</span>
-        <button class="seg active" data-persona="captain">CaptAIn</button>
+        <button class="seg active" data-persona="standard" data-i18n="persona.standard">Standard</button>
         <button class="seg" data-persona="soft" data-i18n="persona.soft">Einfach</button>
       </div>
       <div class="language-toggle" title="Sprache / Language">
@@ -39,8 +38,6 @@
     <nav class="sidenav">
       <button class="nav active" data-view="chat"><span class="ico">💬</span><span data-i18n="nav.chat">Chat</span></button>
       <button class="nav" data-view="terminal"><span class="ico">&gt;_</span><span data-i18n="nav.terminal">Terminal</span><span class="badge" id="terminal-badge" hidden>0</span></button>
-      <button class="nav" data-view="lernpfade"><span class="ico">🎓</span><span data-i18n="nav.learning">Lernpfade</span></button>
-      <button class="nav" data-view="projekte"><span class="ico">🗂️</span><span data-i18n="nav.projects">Projekte</span></button>
       <div class="nav-spacer"></div>
       <button class="nav nav-toggle" id="explorer-toggle" title="Datei-Explorer ein-/ausblenden"><span class="ico">📁</span><span data-i18n="nav.explorer">Explorer</span></button>
     </nav>
@@ -66,23 +63,11 @@
         <div class="panel-head">
           <div>
             <div class="panel-title" data-i18n="terminal.title">Terminal-Sichtfenster</div>
-            <div class="panel-sub" data-i18n="terminal.sub">Zeigt live, was CaptAIn im Hintergrund tatsächlich tut. Nur zum Zuschauen – hier muss nichts eingegeben werden.</div>
+            <div class="panel-sub" data-i18n="terminal.sub">Zeigt live, was der Assistent im Hintergrund tatsächlich tut. Nur zum Zuschauen – hier muss nichts eingegeben werden.</div>
           </div>
           <button class="ghost" id="terminal-clear" data-i18n="terminal.clear">Leeren</button>
         </div>
         <pre class="terminal" id="terminal"></pre>
-      </section>
-
-      <!-- Lernpfade -->
-      <section class="view" id="view-lernpfade" hidden>
-        <div class="panel-head"><div><div class="panel-title" data-i18n="learning.title">Lernpfade</div><div class="panel-sub" data-i18n="learning.sub">Kurze, geführte Einstiege. Ein Klick füllt den Chat vor – du entscheidest, ob du abschickst.</div></div></div>
-        <div class="cards" id="lernpfade"></div>
-      </section>
-
-      <!-- Projekte -->
-      <section class="view" id="view-projekte" hidden>
-        <div class="panel-head"><div><div class="panel-title" data-i18n="projects.title">Projekte</div><div class="panel-sub" data-i18n="projects.sub">Die Projekte, die CaptAIn kennt. Ein Klick wählt das Projekt für deine nächsten Anfragen.</div></div></div>
-        <div class="cards" id="projects"></div>
       </section>
     </main>
 

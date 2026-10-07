@@ -1,4 +1,4 @@
-// The CaptAIn engine: one long-lived Claude Agent SDK session over the CaptAIn workspace.
+// The Claude engine: one long-lived Claude Agent SDK session over the agent workspace.
 //
 // Same engine as the CLI: CLAUDE.md, .claude/skills, hooks and settings are loaded from the
 // workspace (settingSources default = user + project + local). The only differences to the
@@ -104,7 +104,7 @@ export class ClaudeEngine extends EventEmitter implements IEngine {
     this.query
       .initializationResult()
       .then(() => this.emitEvent({ kind: 'ready' }))
-      .catch((e) => this.emitEvent({ kind: 'error', text: t('engine.startFailed', { e: String(e) }) }));
+      .catch((e) => this.emitEvent({ kind: 'error', text: t(/auth|login|credential|api key|ENOENT/i.test(String(e)) ? 'engine.claudeAuth' : 'engine.startFailed', { e: String(e) }) }));
   }
 
   send(text: string): void {
