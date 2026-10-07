@@ -1,8 +1,9 @@
 # Termi
-
+<img width="3768" height="1977" alt="Termi" src="https://github.com/user-attachments/assets/c6f1568c-21a0-4304-a43f-b4fa438a5d62" />
 Termi is a desktop wrapper that provides a friendly, cozy chat interface for powerful Agentic AI CLIs (like the antigravity cli or Claude Agent SDK). 
 
 I originally built this tool for my wife to empower her to use advanced CLI capabilities without having to learn terminal commands. It worked so well that I realized a lot more people could benefit from it! It bridges the gap between powerful developer tools and accessible user interfaces.
+
 
 ## 🌟 Why this exists
 
