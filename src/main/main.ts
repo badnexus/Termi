@@ -88,6 +88,7 @@ function createEngine(): IEngine {
     systemPromptAppend: systemPromptAppend(cfg.persona, getLanguage()),
     language: getLanguage(),
     allowedTools: cfg.allowedTools,
+    effort: cfg.effort,
     claudeExecutable: cfg.claudeExecutable || bundledClaudeExecutable(),
   });
 }

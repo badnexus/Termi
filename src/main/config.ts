@@ -1,6 +1,6 @@
 // App configuration: where the agent workspace lives, what the Datei-Explorer shows, which persona.
-// Dev: config.json next to package.json. Packaged app: %APPDATA%/<productName>/config.json, seeded
-// from the bundled config.json on first start (the app.asar archive is read-only).
+// Dev: config.json next to package.json. Packaged app: the bundled config.json (read-only in app.asar) plus
+// the user's own choices in %APPDATA%/<productName>/config.json (see USER_KEYS).
 // Missing or invalid keys fall back to the defaults below.
 import { app } from 'electron';
 import * as fs from 'node:fs';
@@ -9,6 +9,8 @@ import { LANGUAGES, type Language } from './i18n';
 
 export type Persona = 'standard' | 'soft';
 export type EngineType = 'claude' | 'agy' | 'gpts';
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export interface PocConfig {
   /** The backend engine to use ('claude' for Claude SDK, 'agy' for Antigravity, 'gpts' for GPTS). */
@@ -41,6 +43,12 @@ export interface PocConfig {
    * first, so a hook answering "ask" keeps its approval card.
    */
   allowedTools?: string[];
+  /**
+   * Optional reasoning effort (Claude engine): 'low' | 'medium' | 'high' | 'xhigh' | 'max'. With models that
+   * think adaptively (Opus 4.6+), lower effort means less thinking on simple steps: faster and steadier
+   * answers. Omit for the model's default. Models without effort support ignore it.
+   */
+  effort?: Effort;
   /** Optional path to a Claude Code executable; omit to use the one bundled with the SDK. */
   claudeExecutable?: string;
 }
@@ -71,8 +79,25 @@ function readJson(file: string): Partial<PocConfig> | null {
   }
 }
 
+/**
+ * What users change in the app themselves (persona, DE|EN, model picker, folder picker). In the packaged app only
+ * these are kept in the user's config.json, and only where they differ from the bundled config; everything else
+ * always comes from the bundled config, so a new release (model, effort, allowedTools …) reaches every user.
+ */
+const USER_KEYS = ['persona', 'language', 'model', 'workspaceRoot'] as const;
+
+function userOverrides(cfg: Partial<PocConfig>, bundled: Partial<PocConfig>): Partial<PocConfig> {
+  const out: Record<string, unknown> = {};
+  for (const k of USER_KEYS) if (cfg[k] !== undefined && cfg[k] !== bundled[k]) out[k] = cfg[k];
+  return out as Partial<PocConfig>;
+}
+
 export function loadConfig(): PocConfig {
-  const raw = readJson(CONFIG_PATH) ?? (app.isPackaged ? readJson(BUNDLED_CONFIG) : null) ?? {};
+  const user = readJson(CONFIG_PATH);
+  // Older versions saved the whole config; only the user's own choices are taken from it.
+  const raw = app.isPackaged
+    ? { ...(readJson(BUNDLED_CONFIG) ?? {}), ...(user ? userOverrides(user, {}) : {}) }
+    : (user ?? {});
   // Handle migration from captainRepo to workspaceRepo for existing configs
   if ('captainRepo' in raw && !raw.workspaceRepo) {
     raw.workspaceRepo = (raw as { captainRepo?: string }).captainRepo;
@@ -88,6 +113,7 @@ export function loadConfig(): PocConfig {
   if (typeof cfg.workspaceRoot !== 'string') cfg.workspaceRoot = DEFAULTS.workspaceRoot;
   if (cfg.workspaceGitUrl !== undefined && (typeof cfg.workspaceGitUrl !== 'string' || !cfg.workspaceGitUrl.trim())) delete cfg.workspaceGitUrl;
   if (cfg.availableModels !== undefined && !Array.isArray(cfg.availableModels)) delete cfg.availableModels;
+  if (cfg.effort !== undefined && !EFFORTS.includes(cfg.effort)) delete cfg.effort;
   if (cfg.allowedTools !== undefined && !(Array.isArray(cfg.allowedTools) && cfg.allowedTools.every((r) => typeof r === 'string'))) delete cfg.allowedTools;
   return cfg;
 }
@@ -98,7 +124,8 @@ export function saveConfig(cfg: PocConfig): boolean {
     fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
     // A hand-edited file with a syntax error would be overwritten by defaults: keep a copy first.
     if (fs.existsSync(CONFIG_PATH) && readJson(CONFIG_PATH) === null) fs.copyFileSync(CONFIG_PATH, CONFIG_PATH + '.bak');
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+    const data = app.isPackaged ? userOverrides(cfg, readJson(BUNDLED_CONFIG) ?? {}) : cfg;
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2) + '\n', 'utf8');
     return true;
   } catch {
     return false;
