@@ -17,6 +17,8 @@ export interface PocConfig {
   agentName: string;
   /** Path to the workspace (CLAUDE.md, .claude/skills, project-map/, connectors/). */
   workspaceRepo: string;
+  /** Optional git URL of the workspace: cloned into workspaceRepo on first start, fast-forwarded on every start. */
+  workspaceGitUrl?: string;
   /** Folder shown in the Datei-Explorer when the app opens. */
   workspaceRoot: string;
   /**
@@ -77,6 +79,7 @@ export function loadConfig(): PocConfig {
   if (typeof cfg.agentName !== 'string' || !cfg.agentName.trim()) cfg.agentName = DEFAULTS.agentName;
   if (typeof cfg.workspaceRepo !== 'string') cfg.workspaceRepo = DEFAULTS.workspaceRepo;
   if (typeof cfg.workspaceRoot !== 'string') cfg.workspaceRoot = DEFAULTS.workspaceRoot;
+  if (cfg.workspaceGitUrl !== undefined && (typeof cfg.workspaceGitUrl !== 'string' || !cfg.workspaceGitUrl.trim())) delete cfg.workspaceGitUrl;
   if (cfg.availableModels !== undefined && !Array.isArray(cfg.availableModels)) delete cfg.availableModels;
   return cfg;
 }
