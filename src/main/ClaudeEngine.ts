@@ -84,7 +84,7 @@ export class ClaudeEngine extends EventEmitter implements IEngine {
       // Bypass only when the app was launched with --dangerously-skip-permissions.
       ...(skip
         ? { permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true }
-        : { permissionMode: 'default', canUseTool: this.canUseTool }),
+        : { permissionMode: 'default', canUseTool: this.canUseTool, ...(this.opts.allowedTools?.length ? { allowedTools: this.opts.allowedTools } : {}) }),
       includePartialMessages: true,
       // Lets the workspace's hooks (e.g. a SessionStart welcome) adapt to this surface:
       // TERMI_SURFACE says chat UI with skill buttons instead of a terminal, TERMI_LANGUAGE the UI language.

@@ -28,6 +28,8 @@ export interface EngineOptions {
   skipPermissions?: boolean;
   /** Models offered in the picker for engines that cannot list them themselves (agy, gpts). */
   availableModels?: string[];
+  /** Tool rules allowed without an approval card (config.allowedTools). */
+  allowedTools?: string[];
   /** UI language, passed to the workspace's hooks as TERMI_LANGUAGE. */
   language?: string;
 }
