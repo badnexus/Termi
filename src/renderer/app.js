@@ -145,6 +145,36 @@
     state.activities.delete(ev.id);
   }
 
+  // "Still working" line at the end of the chat: between answers the agent often thinks or waits
+  // for a tool for 10 s and more, and without it the chat looks frozen.
+  const WORKING_KEYS = { Read: 'reading', Glob: 'reading', Grep: 'reading', Write: 'writing', Edit: 'writing',
+    Bash: 'tool', Skill: 'tool', WebFetch: 'web', WebSearch: 'web', Task: 'helper', Agent: 'helper' };
+  let working = null;
+  function showWorking(key = 'thinking') {
+    if (!working) {
+      const el = document.createElement('div');
+      el.className = 'working';
+      el.setAttribute('role', 'status');
+      el.innerHTML = '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="label"></span><span class="secs" aria-hidden="true"></span>';
+      working = { el, since: Date.now(), timer: setInterval(tickWorking, 1000) };
+    }
+    working.el.querySelector('.label').textContent = t('working.' + key, {agent: state.agentName || 'Assistant'});
+    messages.appendChild(working.el); // always the last line
+    tickWorking();
+    scrollDown();
+  }
+  function tickWorking() {
+    if (!working) return;
+    const s = Math.round((Date.now() - working.since) / 1000);
+    working.el.querySelector('.secs').textContent = s >= 3 ? `${s} s` : '';
+  }
+  function hideWorking() {
+    if (!working) return;
+    clearInterval(working.timer);
+    working.el.remove();
+    working = null;
+  }
+
   function addPermissionCard(ev) {
     const card = document.createElement('div');
     card.className = 'perm';
@@ -349,6 +379,7 @@
     api.send(text);
     clearInput();
     setBusy(true);
+    showWorking();
   }
 
   function prefill(phrase) {
@@ -628,10 +659,16 @@
         state.ready = true;
         state.engineSkills = ev.skills || [];
         renderQuick();
+        if (!state.current) {
+          // init comes with the start of a turn (also the workspace's own greeting): show it's working.
+          setBusy(true);
+          showWorking();
+        }
           refreshModels(state.configuredModel || '');
         setStatus(state.busy ? 'busy' : 'ready', state.busy ? t('status.busy', {agent: state.agentName || 'Assistant'}) : `${t('status.ready')} · ${ev.model}`);
         break;
       case 'text_start':
+        hideWorking();
         ensureAssistant();
         setBusy(true);
         break;
@@ -641,22 +678,28 @@
         break;
       case 'text_done':
         finishAssistant();
+        if (state.busy) showWorking();
         break;
       case 'tool_use':
         finishAssistant();
         addActivity(ev);
+        showWorking(WORKING_KEYS[ev.name] || 'tool');
         break;
       case 'tool_result':
         finishActivity(ev);
+        if (state.busy && !state.current) showWorking();
         break;
       case 'permission_request':
         finishAssistant();
+        hideWorking(); // now it waits for the user, the card says so
         addPermissionCard(ev);
         break;
       case 'permission_resolved':
         resolvePermissionCard(ev.requestId, ev.allowed);
+        if (ev.allowed && state.busy) showWorking('tool');
         break;
       case 'result':
+        hideWorking();
         finishAssistant();
         for (const [, el] of state.activities) el.classList.add('done');
         state.activities.clear();
@@ -670,6 +713,7 @@
         termLine(ev.text, 'info');
         break;
       case 'error':
+        hideWorking();
         termLine(ev.text, 'stderr');
         addError(ev.text);
         setStatus('error', t('status.error'));
@@ -680,7 +724,7 @@
 
   // Dev aids used by the screenshot mode (see main.ts).
   api.onShowView((view) => showView(view));
-  api.onEchoUser((text) => { addUser(text); setBusy(true); });
+  api.onEchoUser((text) => { addUser(text); setBusy(true); showWorking(); });
 
   // ---------- boot ----------
   (async () => {
