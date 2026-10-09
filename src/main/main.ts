@@ -21,6 +21,9 @@ let cfg: PocConfig = loadConfig();
 const SKIP_PERMISSIONS = process.argv.includes('--dangerously-skip-permissions');
 
 function sendToUi(ev: EngineEvent): void {
+  // Dev aid: TERMI_LOG=<file> appends every engine event, for runs without a human at the screen.
+  const devLog = process.env.TERMI_LOG;
+  if (devLog) fs.appendFileSync(devLog, `${new Date().toISOString()} ${JSON.stringify(ev)}\n`, 'utf8');
   if (win && !win.isDestroyed()) win.webContents.send('engine:event', ev);
 }
 
@@ -80,7 +83,8 @@ function createEngine(): IEngine {
   if (cfg.engineType === 'gpts') return new GptsEngine(common);
   return new ClaudeEngine({
     ...common,
-    systemPromptAppend: systemPromptAppend(cfg.persona),
+    systemPromptAppend: systemPromptAppend(cfg.persona, getLanguage()),
+    language: getLanguage(),
     claudeExecutable: cfg.claudeExecutable || bundledClaudeExecutable(),
   });
 }
@@ -114,12 +118,23 @@ async function startEngine(): Promise<void> {
   engine.on('event', sendToUi);
   const devSend = process.env.TERMI_SEND;
   if (devSend) {
-    engine.once('event', function waitForInit(this: IEngine, ev: EngineEvent) {
-      if (ev.kind === 'init') {
-        engine?.send(devSend);
-        win?.webContents.send('ui:echoUser', devSend);
-      } else engine?.once('event', waitForInit);
-    });
+    // "a || b || c": a once the engine is ready, each further message after the next finished
+    // answer. Assumes the workspace greets on start, so the first answer is the greeting.
+    const msgs = devSend.split('||').map((m) => m.trim()).filter(Boolean);
+    const sendDev = (text: string) => {
+      engine?.send(text);
+      win?.webContents.send('ui:echoUser', text);
+    };
+    let results = 0;
+    let started = false; // 'init' can arrive more than once per session
+    const onDevEvent = (ev: EngineEvent) => {
+      if (ev.kind === 'init' && !started && msgs.length) {
+        started = true;
+        sendDev(msgs[0]);
+      }
+      if (ev.kind === 'result' && ++results < msgs.length + 1 && results >= 2) sendDev(msgs[results - 1]);
+    };
+    engine.on('event', onDevEvent);
   }
   await engine.start();
   if (cfg.greetOnStart) engine.send(t('greeting', { agent: cfg.agentName }));
