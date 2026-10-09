@@ -96,6 +96,7 @@ export class ClaudeEngine extends EventEmitter implements IEngine {
         }
       },
       ...(this.opts.model ? { model: this.opts.model } : {}),
+      ...(this.opts.effort ? { effort: this.opts.effort } : {}),
       ...(this.opts.claudeExecutable ? { pathToClaudeCodeExecutable: this.opts.claudeExecutable } : {}),
     };
     this.emitEvent({ kind: 'terminal', line: t('engine.starting', { agent: this.opts.agentName || 'Agent', cwd: this.opts.cwd }), level: 'info' });

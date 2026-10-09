@@ -9,6 +9,8 @@ import { LANGUAGES, type Language } from './i18n';
 
 export type Persona = 'standard' | 'soft';
 export type EngineType = 'claude' | 'agy' | 'gpts';
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export interface PocConfig {
   /** The backend engine to use ('claude' for Claude SDK, 'agy' for Antigravity, 'gpts' for GPTS). */
@@ -41,6 +43,12 @@ export interface PocConfig {
    * first, so a hook answering "ask" keeps its approval card.
    */
   allowedTools?: string[];
+  /**
+   * Optional reasoning effort (Claude engine): 'low' | 'medium' | 'high' | 'xhigh' | 'max'. With models that
+   * think adaptively (Opus 4.6+), lower effort means less thinking on simple steps: faster and steadier
+   * answers. Omit for the model's default. Models without effort support ignore it.
+   */
+  effort?: Effort;
   /** Optional path to a Claude Code executable; omit to use the one bundled with the SDK. */
   claudeExecutable?: string;
 }
@@ -88,6 +96,7 @@ export function loadConfig(): PocConfig {
   if (typeof cfg.workspaceRoot !== 'string') cfg.workspaceRoot = DEFAULTS.workspaceRoot;
   if (cfg.workspaceGitUrl !== undefined && (typeof cfg.workspaceGitUrl !== 'string' || !cfg.workspaceGitUrl.trim())) delete cfg.workspaceGitUrl;
   if (cfg.availableModels !== undefined && !Array.isArray(cfg.availableModels)) delete cfg.availableModels;
+  if (cfg.effort !== undefined && !EFFORTS.includes(cfg.effort)) delete cfg.effort;
   if (cfg.allowedTools !== undefined && !(Array.isArray(cfg.allowedTools) && cfg.allowedTools.every((r) => typeof r === 'string'))) delete cfg.allowedTools;
   return cfg;
 }
