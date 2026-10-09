@@ -178,6 +178,16 @@
     card.querySelector('.perm-state').textContent = allowed ? `${t('perm.allowed')} · ${now()}` : `${t('perm.denied')} · ${now()}`;
   }
 
+  // Errors also go into the chat: users who never open the Terminal view must see them.
+  function addError(text) {
+    const el = document.createElement('div');
+    el.className = 'chat-error';
+    el.setAttribute('role', 'alert');
+    el.textContent = text;
+    messages.appendChild(el);
+    scrollDown(true);
+  }
+
   function addTurnEnd(ev) {
     const el = document.createElement('div');
     el.className = 'turn-end';
@@ -661,6 +671,7 @@
         break;
       case 'error':
         termLine(ev.text, 'stderr');
+        addError(ev.text);
         setStatus('error', t('status.error'));
         setBusy(false);
         break;
