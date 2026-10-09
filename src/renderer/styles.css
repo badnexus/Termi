@@ -107,6 +107,14 @@ body.resizing iframe, body.resizing .messages { pointer-events: none; }
 .activity .spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: rot .9s linear infinite; }
 .activity.done .spin { border: none; width: auto; height: auto; animation: none; }
 @keyframes rot { to { transform: rotate(360deg); } }
+.working { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px 52px; color: var(--muted); font-size: 13px; }
+.working .dots { display: inline-flex; gap: 4px; padding: 8px 12px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); }
+.working .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: bounce 1.2s ease-in-out infinite; }
+.working .dots i:nth-child(2) { animation-delay: .15s; }
+.working .dots i:nth-child(3) { animation-delay: .3s; }
+.working .secs { font-variant-numeric: tabular-nums; opacity: .7; }
+@keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .working .dots i { animation: pulse 1.6s ease-in-out infinite; } }
 .turn-end { color: var(--muted); font-size: 11px; margin-left: 52px; }
 .chat-error { margin: 8px 0 8px 52px; padding: 10px 14px; border: 1px solid var(--red); border-radius: var(--radius); background: rgba(239,68,68,.08); color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .cursor::after { content: "▍"; color: var(--accent); animation: pulse 1s infinite; }
