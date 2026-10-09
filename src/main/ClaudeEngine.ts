@@ -86,6 +86,9 @@ export class ClaudeEngine extends EventEmitter implements IEngine {
         ? { permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true }
         : { permissionMode: 'default', canUseTool: this.canUseTool }),
       includePartialMessages: true,
+      // Lets the workspace's hooks (e.g. a SessionStart welcome) adapt to this surface:
+      // TERMI_SURFACE says chat UI with skill buttons instead of a terminal, TERMI_LANGUAGE the UI language.
+      env: { ...process.env, TERMI_SURFACE: 'termi', TERMI_LANGUAGE: this.opts.language ?? 'en' },
       systemPrompt: { type: 'preset', preset: 'claude_code', append: this.opts.systemPromptAppend },
       stderr: (data: string) => {
         for (const line of data.split(/\r?\n/)) {
@@ -222,7 +225,8 @@ export class ClaudeEngine extends EventEmitter implements IEngine {
             line: t('engine.readyClaude', { version: msg.claude_code_version, model: msg.model, mode: msg.permissionMode, n: msg.skills?.length ?? 0 }),
             level: 'info',
           });
-        } else {
+        } else if ((msg as { subtype?: string }).subtype !== 'thinking_tokens') {
+          // thinking_tokens arrives hundreds of times per answer; '… denkt nach' already covers it.
           this.emitEvent({ kind: 'terminal', line: `system/${(msg as { subtype?: string }).subtype ?? '?'}`, level: 'info' });
         }
         return;

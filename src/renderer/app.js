@@ -677,9 +677,9 @@
     state.agentName = cfg.agentName || 'Assistant';
     
     // Update static DOM elements with the dynamic agent name
-    document.title = 'Termi - Assistant for all';
+    document.title = state.agentName;
     const brandTitle = document.querySelector('.brand-title');
-    if (brandTitle) brandTitle.textContent = 'Termi';
+    if (brandTitle) brandTitle.textContent = state.agentName;
 
     state.configuredModel = cfg.model || '';
     if (cfg.runtime && cfg.runtime.skipPermissions) {
