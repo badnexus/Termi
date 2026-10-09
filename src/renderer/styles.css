@@ -108,6 +108,7 @@ body.resizing iframe, body.resizing .messages { pointer-events: none; }
 .activity.done .spin { border: none; width: auto; height: auto; animation: none; }
 @keyframes rot { to { transform: rotate(360deg); } }
 .turn-end { color: var(--muted); font-size: 11px; margin-left: 52px; }
+.chat-error { margin: 8px 0 8px 52px; padding: 10px 14px; border: 1px solid var(--red); border-radius: var(--radius); background: rgba(239,68,68,.08); color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .cursor::after { content: "▍"; color: var(--accent); animation: pulse 1s infinite; }
 
 /* Freigabe-Karte */

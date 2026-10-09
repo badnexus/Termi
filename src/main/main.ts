@@ -9,6 +9,7 @@ import { ClaudeEngine } from './ClaudeEngine';
 import { AgyEngine } from './AgyEngine';
 import { GptsEngine } from './GptsEngine';
 import { listWorkspaceSkills } from './skills';
+import { syncWorkspace } from './workspace';
 import { listDir, statPath } from './files';
 import { systemPromptAppend } from './persona';
 import { detectLanguage, getLanguage, setLanguage, t, type Language } from './i18n';
@@ -16,6 +17,7 @@ import { detectLanguage, getLanguage, setLanguage, t, type Language } from './i1
 let win: BrowserWindow | null = null;
 let engine: IEngine | null = null;
 let cfg: PocConfig = loadConfig();
+let workspaceSynced = false;
 
 /** Only via the launch argument, never persisted: every session without it shows Freigabe-Karten. */
 const SKIP_PERMISSIONS = process.argv.includes('--dangerously-skip-permissions');
@@ -106,6 +108,16 @@ async function startEngine(): Promise<void> {
   const old = engine;
   engine = null;
   if (old) await old.stop();
+
+  // Once per app start, not on every restart (persona or model switch).
+  if (cfg.workspaceGitUrl && !workspaceSynced) {
+    workspaceSynced = true;
+    if (!fs.existsSync(cfg.workspaceRepo)) sendToUi({ kind: 'terminal', line: t('workspace.cloning', { url: cfg.workspaceGitUrl }), level: 'info' });
+    const r = await syncWorkspace(cfg.workspaceGitUrl, cfg.workspaceRepo);
+    if (r.ok) sendToUi({ kind: 'terminal', line: r.line, level: 'info' });
+    else if (fs.existsSync(cfg.workspaceRepo)) sendToUi({ kind: 'terminal', line: r.text, level: 'stderr' });
+    else reportError(r.text); // no workspace at all: the user has to see this
+  }
 
   if (configIsBroken()) {
     sendToUi({ kind: 'terminal', line: t('err.configBroken', { path: configPath() }), level: 'stderr' });
